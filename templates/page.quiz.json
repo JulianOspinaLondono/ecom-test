@@ -1,0 +1,90 @@
+{
+  "sections": {
+    "quiz": {
+      "type": "quiz-funnel",
+      "blocks": {
+        "primary_goal": {
+          "type": "question",
+          "settings": {
+            "property_key": "primary_goal",
+            "question": "What's your #1 health goal right now?",
+            "options": "Lose weight\nCurb hunger & cravings\nBalance my blood sugar\nBoost energy & metabolism\nFeel more confident"
+          }
+        },
+        "weight_goal": {
+          "type": "question",
+          "settings": {
+            "property_key": "weight_goal",
+            "question": "How much weight would you like to release?",
+            "options": "Under 10 lbs\n10–25 lbs\n25–50 lbs\nMore than 50 lbs\nI'm not sure yet"
+          }
+        },
+        "biggest_struggle": {
+          "type": "question",
+          "settings": {
+            "property_key": "biggest_struggle",
+            "question": "What do you struggle with the most?",
+            "options": "Constant hunger\nLate-night snacking\nEmotional eating\nA slow metabolism\nSugar cravings"
+          }
+        },
+        "glp1_experience": {
+          "type": "question",
+          "settings": {
+            "property_key": "glp1_experience",
+            "question": "Have you tried GLP-1 medications before?",
+            "options": "Yes, currently\nYes, in the past\nNo, but I'm curious\nNo, I prefer natural options"
+          }
+        },
+        "energy_levels": {
+          "type": "question",
+          "settings": {
+            "property_key": "energy_levels",
+            "question": "How are your energy levels most days?",
+            "options": "High all day\nGood, but I crash in the afternoon\nLow most of the day\nUp and down\nRunning on empty"
+          }
+        },
+        "delivery_preference": {
+          "type": "question",
+          "settings": {
+            "property_key": "delivery_preference",
+            "question": "How do you feel about pills & injections?",
+            "options": "I avoid injections\nPills upset my stomach\nI forget to take pills\nI love a simple patch\nDoesn't bother me"
+          }
+        },
+        "age_range": {
+          "type": "question",
+          "settings": {
+            "property_key": "age_range",
+            "question": "Which age range describes you?",
+            "options": "18–29\n30–39\n40–49\n50–59\n60+"
+          }
+        },
+        "readiness": {
+          "type": "question",
+          "settings": {
+            "property_key": "readiness",
+            "question": "How ready are you to feel your best?",
+            "options": "Ready today\nWithin a week\nJust exploring\nI need more info"
+          }
+        }
+      },
+      "block_order": [
+        "primary_goal",
+        "weight_goal",
+        "biggest_struggle",
+        "glp1_experience",
+        "energy_levels",
+        "delivery_preference",
+        "age_range",
+        "readiness"
+      ],
+      "settings": {
+        "heading": "Find your GLP-1 match",
+        "subheading": "Answer 8 quick questions to get your personalized plan.",
+        "landing_url": "https://ledisa.com/products/glp-1",
+        "quiz_id": "glp1_quiz"
+      }
+    }
+  },
+  "order": ["quiz"]
+}

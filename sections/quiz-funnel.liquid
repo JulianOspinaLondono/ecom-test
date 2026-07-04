@@ -1,0 +1,593 @@
+{% comment %}
+  Quiz Funnel — an 8-step, accessible, marketing-connected quiz.
+
+  - Server-renders every step (SEO + graceful no-JS fallback).
+  - Enhanced into a wizard by <quiz-funnel> (assets/quiz-funnel.js).
+  - Fully configurable from the theme editor: questions (blocks), tracking IDs,
+    Klaviyo credentials, copy, colors — zero code changes to go live.
+{% endcomment %}
+
+{% liquid
+  assign s = section.settings
+  assign total_steps = section.blocks.size | plus: 1
+  assign accent = s.accent_color | default: '#1f6f5c'
+%}
+
+<quiz-funnel-component
+  class="quiz-funnel section"
+  data-continue-label="{{ s.continue_label | default: 'Continue' | escape }}"
+  data-submit-label="{{ s.submit_label | default: 'See my results' | escape }}"
+  data-loading-label="{{ s.loading_label | default: 'Submitting…' | escape }}"
+  style="
+    --quiz-accent: {{ accent }};
+    --quiz-max-width: {{ s.max_width | default: 720 }}px;
+    {% render 'spacing-style', settings: s %}
+  "
+>
+  {%- comment -%} Public, non-secret config consumed by the web component. {%- endcomment -%}
+  <script type="application/json" data-quiz-config>
+    {
+      "quizId": {{ s.quiz_id | default: 'glp1_quiz' | json }},
+      "landingUrl": {{ s.landing_url | default: 'https://ledisa.com/products/glp-1' | json }},
+      "autoAdvance": {{ s.auto_advance | json }},
+      "appendUtms": {{ s.append_utms | json }},
+      "utmSource": {{ s.utm_source | json }},
+      "utmMedium": {{ s.utm_medium | json }},
+      "utmCampaign": {{ s.utm_campaign | json }},
+      "leadValue": {{ s.lead_value | default: 0 | json }},
+      "gtmId": {{ s.gtm_container_id | json }},
+      "loadGtm": {{ s.load_gtm | json }},
+      "metaPixelId": {{ s.meta_pixel_id | json }},
+      "loadMetaPixel": {{ s.load_meta_pixel | json }},
+      "klaviyoPublicKey": {{ s.klaviyo_public_key | json }},
+      "klaviyoListId": {{ s.klaviyo_list_id | json }},
+      "klaviyoRevision": {{ s.klaviyo_revision | default: '2024-10-15' | json }},
+      "klaviyoMetric": {{ s.klaviyo_metric | default: 'Completed GLP-1 Quiz' | json }},
+      "enableSms": {{ s.enable_sms | json }},
+      "defaultCountryCode": {{ s.default_country_code | default: '1' | json }},
+      "requirePhone": {{ s.require_phone | json }},
+      "requireConsent": {{ s.require_consent | json }}
+    }
+  </script>
+
+  <div class="quiz-funnel__inner">
+    {% if s.heading != blank or s.subheading != blank %}
+      <header class="quiz-funnel__header">
+        {% if s.heading != blank %}
+          <h2 class="quiz-funnel__heading">{{ s.heading | escape }}</h2>
+        {% endif %}
+        {% if s.subheading != blank %}
+          <p class="quiz-funnel__subheading">{{ s.subheading | escape }}</p>
+        {% endif %}
+      </header>
+    {% endif %}
+
+    {% if s.show_progress %}
+      <div class="quiz-funnel__progress">
+        <div
+          class="quiz-funnel__progress-track"
+          ref="progressBar"
+          role="progressbar"
+          aria-label="Quiz progress"
+          aria-valuemin="1"
+          aria-valuemax="{{ total_steps }}"
+          aria-valuenow="1"
+          aria-valuetext="Step 1 of {{ total_steps }}"
+        >
+          <span class="quiz-funnel__progress-fill" ref="progressFill"></span>
+        </div>
+        <p class="quiz-funnel__progress-label" ref="progressLabel" aria-hidden="true">Step 1 of {{ total_steps }}</p>
+      </div>
+    {% endif %}
+
+    <form class="quiz-funnel__form" ref="form" on:submit="/onSubmit" novalidate>
+      <div class="quiz-funnel__steps">
+        {% for block in section.blocks %}
+          {% render 'quiz-question',
+            block: block,
+            index: forloop.index,
+            visible: forloop.first
+          %}
+        {% endfor %}
+
+        {%- comment -%} Fixed final step: contact capture + submit. {%- endcomment -%}
+        <div
+          class="quiz-step quiz-step--contact"
+          data-quiz-step
+          data-step-type="contact"
+          data-step-index="{{ total_steps }}"
+          aria-labelledby="quiz-contact-title"
+          hidden
+        >
+          <h3 id="quiz-contact-title" class="quiz-step__title">
+            {{ s.contact_heading | default: "You're one step away" | escape }}
+          </h3>
+          {% if s.contact_subtext != blank %}
+            <p class="quiz-step__subtext">{{ s.contact_subtext | escape }}</p>
+          {% endif %}
+
+          <div class="quiz-field">
+            <label for="quiz-first-name">{{ s.name_label | default: 'First name' | escape }}</label>
+            <input
+              id="quiz-first-name"
+              name="first_name"
+              type="text"
+              autocomplete="given-name"
+              autocapitalize="words"
+              required
+            >
+          </div>
+
+          <div class="quiz-field">
+            <label for="quiz-email">{{ s.email_label | default: 'Email address' | escape }}</label>
+            <input
+              id="quiz-email"
+              name="email"
+              type="email"
+              autocomplete="email"
+              inputmode="email"
+              autocapitalize="off"
+              autocorrect="off"
+              required
+            >
+          </div>
+
+          <div class="quiz-field">
+            <label for="quiz-phone">{{ s.phone_label | default: 'Phone number' | escape }}</label>
+            <input
+              id="quiz-phone"
+              name="phone"
+              type="tel"
+              autocomplete="tel"
+              inputmode="tel"
+              {% if s.require_phone %}required{% endif %}
+            >
+          </div>
+
+          {% if s.consent_text != blank %}
+            <label class="quiz-consent">
+              <input type="checkbox" name="consent" {% if s.require_consent %}required{% endif %}>
+              <span>{{ s.consent_text | escape }}</span>
+            </label>
+          {% endif %}
+
+          <p class="quiz-step__error" data-quiz-error hidden></p>
+        </div>
+      </div>
+
+      <div class="quiz-funnel__nav">
+        <button
+          type="button"
+          class="quiz-funnel__back button button-secondary"
+          ref="backButton"
+          on:click="/back"
+          hidden
+        >
+          {{ s.back_label | default: 'Back' | escape }}
+        </button>
+        <button type="submit" class="quiz-funnel__continue button" ref="continueButton">
+          {{ s.continue_label | default: 'Continue' | escape }}
+        </button>
+      </div>
+    </form>
+
+    {% if s.disclaimer != blank %}
+      <p class="quiz-funnel__disclaimer">{{ s.disclaimer | escape }}</p>
+    {% endif %}
+
+    {%- comment -%} Polite live region announces step changes for screen readers. {%- endcomment -%}
+    <div class="visually-hidden" role="status" aria-live="polite" ref="live"></div>
+  </div>
+</quiz-funnel-component>
+
+{%- comment -%} No-JS fallback: reveal all steps as a plain form, hide the wizard nav. {%- endcomment -%}
+<noscript>
+  <style>
+    .quiz-step[hidden] { display: block !important; }
+    .quiz-funnel__nav .quiz-funnel__back { display: none !important; }
+  </style>
+</noscript>
+
+<script src="{{ 'quiz-funnel.js' | asset_url }}" type="module" fetchpriority="low"></script>
+
+{% stylesheet %}
+  .quiz-funnel {
+    display: block;
+    padding-block: var(--padding-block-start, 48px) var(--padding-block-end, 48px);
+    padding-inline: var(--padding-inline-start, 20px) var(--padding-inline-end, 20px);
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+  }
+
+  .quiz-funnel__inner {
+    max-inline-size: var(--quiz-max-width, 720px);
+    margin-inline: auto;
+  }
+
+  .quiz-funnel__header {
+    text-align: center;
+    margin-block-end: var(--margin-lg, 24px);
+  }
+
+  .quiz-funnel__heading {
+    margin: 0 0 8px;
+  }
+
+  .quiz-funnel__subheading {
+    margin: 0;
+    opacity: 0.8;
+  }
+
+  /* --- Progress bar --- */
+  .quiz-funnel__progress {
+    margin-block-end: clamp(20px, 4vw, 32px);
+  }
+
+  .quiz-funnel__progress-track {
+    block-size: 8px;
+    border-radius: 999px;
+    background-color: rgb(var(--color-foreground-rgb) / 0.12);
+    overflow: hidden;
+  }
+
+  .quiz-funnel__progress-fill {
+    display: block;
+    block-size: 100%;
+    inline-size: 0;
+    border-radius: inherit;
+    background-color: var(--quiz-accent);
+    transition: inline-size 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .quiz-funnel__progress-label {
+    margin: 8px 0 0;
+    font-size: 0.85rem;
+    letter-spacing: 0.02em;
+    opacity: 0.7;
+  }
+
+  /* --- Steps --- */
+  .quiz-funnel__steps {
+    position: relative;
+  }
+
+  .quiz-step {
+    margin: 0;
+    padding: 0;
+    border: 0;
+    min-inline-size: 0;
+  }
+
+  /* Enhanced wizard shows one step; base/no-JS shows all. */
+  .quiz-funnel.is-enhanced .quiz-step { display: none; }
+  .quiz-funnel.is-enhanced .quiz-step.is-active { display: block; }
+
+  .quiz-step.is-active {
+    animation: quiz-step-in 0.35s ease both;
+  }
+
+  .quiz-step__eyebrow {
+    display: block;
+    font-size: 0.78rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--quiz-accent);
+    margin-block-end: 6px;
+  }
+
+  .quiz-step__question,
+  .quiz-step__title {
+    font-size: clamp(1.35rem, 4vw, 1.9rem);
+    line-height: 1.2;
+    font-weight: 600;
+    margin: 0 0 6px;
+    padding: 0;
+  }
+
+  .quiz-step__question:focus-visible,
+  .quiz-step__title:focus-visible {
+    outline: 2px solid var(--quiz-accent);
+    outline-offset: 4px;
+    border-radius: 4px;
+  }
+
+  .quiz-step__subtext {
+    margin: 0 0 20px;
+    opacity: 0.75;
+  }
+
+  .quiz-step__options {
+    display: grid;
+    gap: 12px;
+    margin-block: 24px;
+  }
+
+  /* --- Option cards --- */
+  .quiz-option {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 16px 18px;
+    border: 1.5px solid rgb(var(--color-foreground-rgb) / 0.15);
+    border-radius: 14px;
+    cursor: pointer;
+    transition: border-color 0.15s ease, background-color 0.15s ease, transform 0.05s ease;
+    background-color: var(--color-background);
+  }
+
+  .quiz-option:hover {
+    border-color: var(--quiz-accent);
+    background-color: rgb(var(--color-foreground-rgb) / 0.03);
+  }
+
+  .quiz-option:active { transform: scale(0.99); }
+
+  .quiz-option__control {
+    flex: 0 0 auto;
+    inline-size: 22px;
+    block-size: 22px;
+    border: 2px solid rgb(var(--color-foreground-rgb) / 0.35);
+    border-radius: 50%;
+    display: grid;
+    place-content: center;
+    transition: border-color 0.15s ease;
+  }
+
+  .quiz-option__input[type='checkbox'] + .quiz-option__control { border-radius: 6px; }
+
+  .quiz-option__control::after {
+    content: '';
+    inline-size: 11px;
+    block-size: 11px;
+    border-radius: inherit;
+    background-color: var(--quiz-accent);
+    transform: scale(0);
+    transition: transform 0.15s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .quiz-option__label {
+    font-size: 1.02rem;
+    line-height: 1.35;
+  }
+
+  /* Selected + keyboard focus states driven by the real input. */
+  .quiz-option__input:checked ~ .quiz-option__control { border-color: var(--quiz-accent); }
+  .quiz-option__input:checked ~ .quiz-option__control::after { transform: scale(1); }
+
+  .quiz-option:has(.quiz-option__input:checked) {
+    border-color: var(--quiz-accent);
+    background-color: rgb(var(--color-foreground-rgb) / 0.04);
+    box-shadow: 0 0 0 1px var(--quiz-accent) inset;
+  }
+
+  .quiz-option:has(.quiz-option__input:focus-visible) {
+    outline: 2px solid var(--quiz-accent);
+    outline-offset: 2px;
+  }
+
+  /* --- Contact fields --- */
+  .quiz-field {
+    display: grid;
+    gap: 6px;
+    margin-block-end: 16px;
+  }
+
+  .quiz-field label {
+    font-weight: 600;
+    font-size: 0.92rem;
+  }
+
+  .quiz-field input {
+    inline-size: 100%;
+    padding: 14px 16px;
+    font-size: 1rem;
+    border: 1.5px solid rgb(var(--color-foreground-rgb) / 0.2);
+    border-radius: 12px;
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    transition: border-color 0.15s ease;
+  }
+
+  .quiz-field input:focus-visible {
+    outline: none;
+    border-color: var(--quiz-accent);
+    box-shadow: 0 0 0 3px rgb(var(--color-foreground-rgb) / 0.08);
+  }
+
+  .quiz-field input[aria-invalid='true'] {
+    border-color: #d33f3f;
+  }
+
+  .quiz-consent {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    font-size: 0.88rem;
+    opacity: 0.85;
+    margin-block: 8px 4px;
+    cursor: pointer;
+  }
+
+  .quiz-consent input {
+    margin-block-start: 3px;
+    inline-size: 18px;
+    block-size: 18px;
+    accent-color: var(--quiz-accent);
+    flex: 0 0 auto;
+  }
+
+  .quiz-step__error {
+    color: #d33f3f;
+    font-size: 0.9rem;
+    margin: 8px 0 0;
+    font-weight: 500;
+  }
+
+  /* --- Navigation --- */
+  .quiz-funnel__nav {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    margin-block-start: 28px;
+  }
+
+  .quiz-funnel__continue {
+    flex: 1;
+    min-block-size: 52px;
+    font-size: 1.05rem;
+    background-color: var(--quiz-accent);
+    color: #fff;
+    border: 0;
+    border-radius: 999px;
+    cursor: pointer;
+  }
+
+  .quiz-funnel__continue[disabled] { opacity: 0.7; cursor: progress; }
+
+  .quiz-funnel__back {
+    min-block-size: 52px;
+    border-radius: 999px;
+    padding-inline: 22px;
+    background: transparent;
+    border: 1.5px solid rgb(var(--color-foreground-rgb) / 0.25);
+    color: var(--color-foreground);
+    cursor: pointer;
+  }
+
+  .quiz-funnel__disclaimer {
+    margin-block-start: 16px;
+    font-size: 0.78rem;
+    text-align: center;
+    opacity: 0.6;
+  }
+
+  @keyframes quiz-step-in {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .quiz-funnel__progress-fill,
+    .quiz-option,
+    .quiz-option__control::after { transition: none; }
+    .quiz-step.is-active { animation: none; }
+  }
+
+  @media screen and (min-width: 750px) {
+    .quiz-step__options--two-col { grid-template-columns: 1fr 1fr; }
+  }
+{% endstylesheet %}
+
+{% schema %}
+{
+  "name": "Quiz funnel",
+  "tag": "section",
+  "class": "section-wrapper quiz-funnel-section",
+  "settings": [
+    { "type": "header", "content": "Content" },
+    { "type": "text", "id": "heading", "label": "Heading", "default": "Find your GLP-1 match" },
+    { "type": "text", "id": "subheading", "label": "Subheading", "default": "Answer 8 quick questions to get your personalized plan." },
+    { "type": "textarea", "id": "disclaimer", "label": "Disclaimer", "default": "This quiz is for informational purposes only and is not medical advice." },
+
+    { "type": "header", "content": "Behavior" },
+    { "type": "checkbox", "id": "show_progress", "label": "Show progress bar", "default": true },
+    { "type": "checkbox", "id": "auto_advance", "label": "Auto-advance on answer", "info": "Single-choice questions move forward automatically.", "default": true },
+
+    { "type": "header", "content": "Final step — contact" },
+    { "type": "text", "id": "contact_heading", "label": "Heading", "default": "You're one step away 🎉" },
+    { "type": "text", "id": "contact_subtext", "label": "Subtext", "default": "Enter your details to unlock your personalized GLP-1 plan." },
+    { "type": "text", "id": "name_label", "label": "First name label", "default": "First name" },
+    { "type": "text", "id": "email_label", "label": "Email label", "default": "Email address" },
+    { "type": "text", "id": "phone_label", "label": "Phone label", "default": "Phone number" },
+    { "type": "checkbox", "id": "require_phone", "label": "Require phone", "default": true },
+    { "type": "textarea", "id": "consent_text", "label": "Consent text", "default": "I agree to receive emails & texts about my results. Unsubscribe anytime." },
+    { "type": "checkbox", "id": "require_consent", "label": "Require consent checkbox", "default": true },
+
+    { "type": "header", "content": "Buttons" },
+    { "type": "text", "id": "continue_label", "label": "Continue label", "default": "Continue" },
+    { "type": "text", "id": "back_label", "label": "Back label", "default": "Back" },
+    { "type": "text", "id": "submit_label", "label": "Submit label", "default": "See my results" },
+    { "type": "text", "id": "loading_label", "label": "Loading label", "default": "Submitting…" },
+
+    { "type": "header", "content": "Destination" },
+    { "type": "url", "id": "landing_url", "label": "Final landing URL", "info": "Where the last button sends the user." },
+    { "type": "checkbox", "id": "append_utms", "label": "Append UTM parameters", "default": true },
+    { "type": "text", "id": "utm_source", "label": "utm_source", "default": "quiz" },
+    { "type": "text", "id": "utm_medium", "label": "utm_medium", "default": "funnel" },
+    { "type": "text", "id": "utm_campaign", "label": "utm_campaign", "default": "glp1" },
+
+    { "type": "header", "content": "Tracking — GTM & Meta" },
+    { "type": "text", "id": "quiz_id", "label": "Quiz ID", "info": "Used as an event parameter.", "default": "glp1_quiz" },
+    { "type": "text", "id": "gtm_container_id", "label": "GTM container ID", "info": "e.g. GTM-XXXXXXX" },
+    { "type": "checkbox", "id": "load_gtm", "label": "Load GTM from this section", "info": "Turn OFF if GTM is installed globally in theme.liquid (recommended for production).", "default": true },
+    { "type": "text", "id": "meta_pixel_id", "label": "Meta Pixel ID" },
+    { "type": "checkbox", "id": "load_meta_pixel", "label": "Load Meta Pixel from this section", "default": true },
+    { "type": "range", "id": "lead_value", "label": "Lead value", "min": 0, "max": 500, "step": 5, "unit": "$", "default": 0 },
+
+    { "type": "header", "content": "Klaviyo (Client API)" },
+    { "type": "paragraph", "content": "Uses the PUBLIC key (safe in the browser). No private key is ever stored in the theme." },
+    { "type": "text", "id": "klaviyo_public_key", "label": "Public API key (company ID)" },
+    { "type": "text", "id": "klaviyo_list_id", "label": "List ID" },
+    { "type": "text", "id": "klaviyo_revision", "label": "API revision", "default": "2024-10-15" },
+    { "type": "text", "id": "klaviyo_metric", "label": "Event / metric name", "default": "Completed GLP-1 Quiz" },
+    { "type": "checkbox", "id": "enable_sms", "label": "Also collect SMS consent", "default": false },
+    { "type": "text", "id": "default_country_code", "label": "Default country code for phone", "info": "Digits only, no +. Used to format numbers to E.164.", "default": "1" },
+
+    { "type": "header", "content": "Design" },
+    { "type": "color", "id": "accent_color", "label": "Accent color", "default": "#1f6f5c" },
+    { "type": "range", "id": "max_width", "label": "Max width", "min": 480, "max": 1000, "step": 20, "unit": "px", "default": 720 },
+
+    { "type": "header", "content": "Section padding" },
+    { "type": "range", "id": "padding-block-start", "label": "Top padding", "min": 0, "max": 120, "step": 4, "unit": "px", "default": 48 },
+    { "type": "range", "id": "padding-block-end", "label": "Bottom padding", "min": 0, "max": 120, "step": 4, "unit": "px", "default": 48 },
+    { "type": "range", "id": "padding-inline-start", "label": "Left padding", "min": 0, "max": 60, "step": 2, "unit": "px", "default": 20 },
+    { "type": "range", "id": "padding-inline-end", "label": "Right padding", "min": 0, "max": 60, "step": 2, "unit": "px", "default": 20 }
+  ],
+  "blocks": [
+    {
+      "type": "question",
+      "name": "Question",
+      "settings": [
+        { "type": "text", "id": "question", "label": "Question", "default": "Your question here" },
+        { "type": "text", "id": "subtext", "label": "Helper text (optional)" },
+        { "type": "textarea", "id": "options", "label": "Answer options", "info": "One option per line.", "default": "Option 1\nOption 2\nOption 3" },
+        {
+          "type": "select",
+          "id": "input_type",
+          "label": "Selection type",
+          "options": [
+            { "value": "single", "label": "Single choice" },
+            { "value": "multiple", "label": "Multiple choice" }
+          ],
+          "default": "single"
+        },
+        { "type": "text", "id": "property_key", "label": "Klaviyo / GTM property key", "info": "snake_case, e.g. primary_goal. Auto-generated if blank." },
+        { "type": "checkbox", "id": "optional", "label": "Optional (allow skipping)", "default": false }
+      ]
+    }
+  ],
+  "max_blocks": 20,
+  "presets": [
+    {
+      "name": "Quiz funnel (GLP-1)",
+      "settings": {
+        "heading": "Find your GLP-1 match",
+        "subheading": "Answer 8 quick questions to get your personalized plan.",
+        "landing_url": "https://ledisa.com/products/glp-1"
+      },
+      "blocks": [
+        { "type": "question", "settings": { "property_key": "primary_goal", "question": "What's your #1 health goal right now?", "options": "Lose weight\nCurb hunger & cravings\nBalance my blood sugar\nBoost energy & metabolism\nFeel more confident" } },
+        { "type": "question", "settings": { "property_key": "weight_goal", "question": "How much weight would you like to release?", "options": "Under 10 lbs\n10–25 lbs\n25–50 lbs\nMore than 50 lbs\nI'm not sure yet" } },
+        { "type": "question", "settings": { "property_key": "biggest_struggle", "question": "What do you struggle with the most?", "options": "Constant hunger\nLate-night snacking\nEmotional eating\nA slow metabolism\nSugar cravings" } },
+        { "type": "question", "settings": { "property_key": "glp1_experience", "question": "Have you tried GLP-1 medications before?", "options": "Yes, currently\nYes, in the past\nNo, but I'm curious\nNo, I prefer natural options" } },
+        { "type": "question", "settings": { "property_key": "energy_levels", "question": "How are your energy levels most days?", "options": "High all day\nGood, but I crash in the afternoon\nLow most of the day\nUp and down\nRunning on empty" } },
+        { "type": "question", "settings": { "property_key": "delivery_preference", "question": "How do you feel about pills & injections?", "options": "I avoid injections\nPills upset my stomach\nI forget to take pills\nI love a simple patch\nDoesn't bother me" } },
+        { "type": "question", "settings": { "property_key": "age_range", "question": "Which age range describes you?", "options": "18–29\n30–39\n40–49\n50–59\n60+" } },
+        { "type": "question", "settings": { "property_key": "readiness", "question": "How ready are you to feel your best?", "options": "Ready today\nWithin a week\nJust exploring\nI need more info" } }
+      ]
+    }
+  ]
+}
+{% endschema %}

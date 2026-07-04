@@ -1,0 +1,89 @@
+{% doc %}
+  Renders a single quiz question as a wizard step (fieldset + radiogroup).
+
+  Server-rendered so questions are crawlable (SEO) and usable without JS. The
+  <quiz-funnel> web component enhances these into a stepped experience.
+
+  @param {object} block - The section `question` block.
+  @param {number} index - 1-based question index.
+  @param {boolean} [visible] - When true, the step renders visible (first step).
+{% enddoc %}
+
+{% liquid
+  assign q = block.settings
+  assign field_name = 'quiz-q-' | append: block.id
+  assign is_multiple = false
+  if q.input_type == 'multiple'
+    assign is_multiple = true
+  endif
+  assign input_type = 'radio'
+  if is_multiple
+    assign input_type = 'checkbox'
+  endif
+  # Property key sent to Klaviyo/GTM. Falls back to a stable, human-readable key.
+  assign prop_key = q.property_key | strip
+  if prop_key == blank
+    assign prop_key = 'question_' | append: index
+  endif
+%}
+
+<fieldset
+  class="quiz-step quiz-step--question"
+  data-quiz-step
+  data-step-index="{{ index }}"
+  data-step-id="{{ block.id }}"
+  data-step-type="question"
+  data-step-key="{{ prop_key | escape }}"
+  data-step-optional="{{ q.optional }}"
+  data-step-multiple="{{ is_multiple }}"
+  data-question="{{ q.question | escape }}"
+  aria-labelledby="quiz-legend-{{ block.id }}"
+  {% unless visible %}hidden{% endunless %}
+  {{ block.shopify_attributes }}
+>
+  <legend
+    id="quiz-legend-{{ block.id }}"
+    class="quiz-step__question"
+  >
+    <span class="quiz-step__eyebrow">
+      {{- 'Question' }} {{ index }}{% if q.optional %} · optional{% endif -%}
+    </span>
+    {{ q.question | default: 'Your question here' | escape }}
+  </legend>
+
+  {% if q.subtext != blank %}
+    <p class="quiz-step__subtext">{{ q.subtext | escape }}</p>
+  {% endif %}
+
+  <div
+    class="quiz-step__options"
+    {% unless is_multiple %}
+      role="radiogroup"
+      aria-labelledby="quiz-legend-{{ block.id }}"
+    {% endunless %}
+  >
+    {% assign options = q.options | strip | split: '
+' %}
+    {% for option in options %}
+      {% assign label = option | strip %}
+      {% if label == blank %}
+        {% continue %}
+      {% endif %}
+      <label class="quiz-option">
+        <input
+          class="quiz-option__input visually-hidden"
+          type="{{ input_type }}"
+          name="{{ field_name }}"
+          value="{{ label | escape }}"
+          on:change="/onSelect"
+        >
+        <span class="quiz-option__control" aria-hidden="true"></span>
+        <span class="quiz-option__label">{{ label | escape }}</span>
+      </label>
+    {% endfor %}
+  </div>
+
+  <p class="quiz-step__error" data-quiz-error hidden>
+    {{ 'Please select an option to continue.' }}
+  </p>
+</fieldset>

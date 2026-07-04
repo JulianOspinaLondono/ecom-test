@@ -97,7 +97,7 @@ adds to the list in one shot):
 ```http
 POST https://a.klaviyo.com/api/profile-subscription-bulk-create-jobs/
 Authorization: Klaviyo-API-Key <PRIVATE_KEY>
-revision: 2024-10-15
+revision: 2026-04-15
 Content-Type: application/json
 
 {

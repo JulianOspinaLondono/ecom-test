@@ -1,0 +1,625 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>GLP-1 Quiz Funnel — Standalone Preview</title>
+  <meta name="robots" content="noindex">
+  <!--
+    STANDALONE VISUAL PREVIEW of the Shopify (Horizon) section.
+    Opens with a double-click — no server, no Shopify, no external calls.
+    Source of truth for production is sections/quiz-funnel.liquid + assets/quiz-funnel.js.
+    This file mirrors that UX with vanilla JS and logs marketing events to the
+    on-page panel (and window.dataLayer / console) instead of hitting GTM/Klaviyo.
+  -->
+  <style>
+    /* --- Theme tokens the Shopify theme normally provides (Ledisa palette) --- */
+    :root {
+      --color-background: #fffaf4;
+      --color-foreground: #121212;
+      /* Space-separated on purpose: consumed as rgb(var(--…) / alpha), matching Horizon. */
+      --color-foreground-rgb: 18 18 18;
+      --margin-lg: 24px;
+      --quiz-accent: #1d8391;
+      --quiz-cta: #ff6b12;
+      --quiz-cta-text: #ffffff;
+      --quiz-max-width: 640px;
+      --padding-block-start: 44px;
+      --padding-block-end: 44px;
+      --padding-inline-start: 28px;
+      --padding-inline-end: 28px;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      color: var(--color-foreground);
+      background: radial-gradient(1200px 600px at 20% -10%, #e0f9fd 0%, transparent 60%),
+        radial-gradient(1000px 500px at 100% 0%, #fff2e6 0%, transparent 55%), #eef1f0;
+      min-height: 100vh;
+      padding: 24px;
+    }
+
+    .visually-hidden {
+      position: absolute !important;
+      width: 1px; height: 1px;
+      padding: 0; margin: -1px;
+      overflow: hidden; clip: rect(0 0 0 0);
+      white-space: nowrap; border: 0;
+    }
+
+    .preview-wrap {
+      max-width: 1080px;
+      margin: 0 auto;
+      display: grid;
+      gap: 20px;
+      grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+      align-items: start;
+    }
+
+    @media (max-width: 900px) {
+      .preview-wrap { grid-template-columns: 1fr; }
+    }
+
+    .preview-badge {
+      grid-column: 1 / -1;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 0.82rem;
+      color: #45575a;
+    }
+    .preview-badge strong { color: var(--quiz-accent); }
+    .preview-badge .dot { inline-size: 8px; block-size: 8px; border-radius: 50%; background: var(--quiz-cta); }
+
+    .preview-card {
+      border-radius: 22px;
+      overflow: hidden;
+      box-shadow: 0 20px 50px -20px rgba(18, 39, 43, 0.35);
+      background: var(--color-background);
+    }
+
+    /* --- Live events panel (for the Loom) --- */
+    .preview-events {
+      border-radius: 22px;
+      background: #0c373d;
+      color: #d1f7fc;
+      padding: 18px 18px 22px;
+      box-shadow: 0 20px 50px -24px rgba(12, 55, 61, 0.6);
+      position: sticky;
+      top: 24px;
+    }
+    .preview-events h2 {
+      margin: 0 0 4px;
+      font-size: 0.95rem;
+      letter-spacing: 0.02em;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .preview-events .live-dot {
+      inline-size: 8px; block-size: 8px; border-radius: 50%;
+      background: #38d39f; box-shadow: 0 0 0 0 rgba(56, 211, 159, 0.6);
+      animation: pv-pulse 1.6s infinite;
+    }
+    @keyframes pv-pulse { 70% { box-shadow: 0 0 0 8px rgba(56, 211, 159, 0); } }
+    .preview-events p.hint { margin: 0 0 12px; font-size: 0.75rem; opacity: 0.65; }
+    .preview-events ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; max-height: 60vh; overflow: auto; }
+    .pv-event {
+      background: rgba(255, 255, 255, 0.06);
+      border-left: 3px solid var(--quiz-accent);
+      border-radius: 8px;
+      padding: 8px 10px;
+      font-size: 0.78rem;
+      animation: pv-in 0.25s ease both;
+    }
+    .pv-event.pv-lead { border-left-color: var(--quiz-cta); }
+    .pv-event.pv-meta { border-left-color: #1877f2; }
+    .pv-event code { color: #fff; font-weight: 600; }
+    .pv-event pre { margin: 4px 0 0; white-space: pre-wrap; word-break: break-word; opacity: 0.75; font-size: 0.72rem; }
+    @keyframes pv-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
+
+    /* =====================================================================
+       Quiz styles — copied verbatim from sections/quiz-funnel.liquid
+       ===================================================================== */
+    .quiz-funnel {
+      display: block;
+      padding-block: var(--padding-block-start, 48px) var(--padding-block-end, 48px);
+      padding-inline: var(--padding-inline-start, 20px) var(--padding-inline-end, 20px);
+      background-color: var(--color-background);
+      color: var(--color-foreground);
+    }
+    .quiz-funnel__inner { max-inline-size: var(--quiz-max-width, 720px); margin-inline: auto; }
+    .quiz-funnel__header { text-align: center; margin-block-end: var(--margin-lg, 24px); }
+    .quiz-funnel__heading { margin: 0 0 8px; }
+    .quiz-funnel__subheading { margin: 0; opacity: 0.8; }
+
+    .quiz-funnel__progress { margin-block-end: clamp(20px, 4vw, 32px); }
+    .quiz-funnel__progress-track {
+      block-size: 8px; border-radius: 999px;
+      background-color: rgb(var(--color-foreground-rgb) / 0.12); overflow: hidden;
+    }
+    .quiz-funnel__progress-fill {
+      display: block; block-size: 100%; inline-size: 0; border-radius: inherit;
+      background-color: var(--quiz-accent);
+      transition: inline-size 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+    .quiz-funnel__progress-label { margin: 8px 0 0; font-size: 0.85rem; letter-spacing: 0.02em; opacity: 0.7; }
+
+    .quiz-funnel__steps { position: relative; }
+    .quiz-step { margin: 0; padding: 0; border: 0; min-inline-size: 0; }
+    .quiz-funnel.is-enhanced .quiz-step { display: none; }
+    .quiz-funnel.is-enhanced .quiz-step.is-active { display: block; }
+    .quiz-step.is-active { animation: quiz-step-in 0.35s ease both; }
+
+    .quiz-step__eyebrow {
+      display: block; font-size: 0.78rem; font-weight: 600; text-transform: uppercase;
+      letter-spacing: 0.08em; color: var(--quiz-accent); margin-block-end: 6px;
+    }
+    .quiz-step__question, .quiz-step__title {
+      font-size: clamp(1.35rem, 4vw, 1.9rem); line-height: 1.2; font-weight: 600; margin: 0 0 6px; padding: 0;
+    }
+    .quiz-step__question:focus-visible, .quiz-step__title:focus-visible {
+      outline: 2px solid var(--quiz-accent); outline-offset: 4px; border-radius: 4px;
+    }
+    .quiz-step__subtext { margin: 0 0 20px; opacity: 0.75; }
+    .quiz-step__options { display: grid; gap: 12px; margin-block: 24px; }
+
+    .quiz-option {
+      position: relative; display: flex; align-items: center; gap: 14px; padding: 16px 18px;
+      border: 1.5px solid rgb(var(--color-foreground-rgb) / 0.15); border-radius: 14px; cursor: pointer;
+      transition: border-color 0.15s ease, background-color 0.15s ease, transform 0.05s ease;
+      background-color: var(--color-background);
+    }
+    .quiz-option:hover { border-color: var(--quiz-accent); background-color: color-mix(in srgb, var(--quiz-accent) 5%, var(--color-background)); }
+    .quiz-option:active { transform: scale(0.99); }
+    .quiz-option__control {
+      flex: 0 0 auto; inline-size: 22px; block-size: 22px;
+      border: 2px solid rgb(var(--color-foreground-rgb) / 0.35); border-radius: 50%;
+      display: grid; place-content: center; transition: border-color 0.15s ease;
+    }
+    .quiz-option__input[type='checkbox'] + .quiz-option__control { border-radius: 6px; }
+    .quiz-option__control::after {
+      content: ''; inline-size: 11px; block-size: 11px; border-radius: inherit;
+      background-color: var(--quiz-accent); transform: scale(0);
+      transition: transform 0.15s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+    .quiz-option__label { font-size: 1.02rem; line-height: 1.35; }
+    .quiz-option__input:checked ~ .quiz-option__control { border-color: var(--quiz-accent); }
+    .quiz-option__input:checked ~ .quiz-option__control::after { transform: scale(1); }
+    .quiz-option:has(.quiz-option__input:checked) {
+      border-color: var(--quiz-accent);
+      background-color: color-mix(in srgb, var(--quiz-accent) 8%, var(--color-background));
+      box-shadow: 0 0 0 1px var(--quiz-accent) inset;
+    }
+    .quiz-option:has(.quiz-option__input:focus-visible) { outline: 2px solid var(--quiz-accent); outline-offset: 2px; }
+
+    .quiz-field { display: grid; gap: 6px; margin-block-end: 16px; }
+    .quiz-field label { font-weight: 600; font-size: 0.92rem; }
+    .quiz-field input {
+      inline-size: 100%; padding: 14px 16px; font-size: 1rem;
+      border: 1.5px solid rgb(var(--color-foreground-rgb) / 0.2); border-radius: 12px;
+      background-color: var(--color-background); color: var(--color-foreground); transition: border-color 0.15s ease;
+    }
+    .quiz-field input:focus-visible { outline: none; border-color: var(--quiz-accent); box-shadow: 0 0 0 3px rgb(var(--color-foreground-rgb) / 0.08); }
+    .quiz-field input[aria-invalid='true'] { border-color: #d33f3f; }
+    .quiz-consent { display: flex; gap: 10px; align-items: flex-start; font-size: 0.88rem; opacity: 0.85; margin-block: 8px 4px; cursor: pointer; }
+    .quiz-consent input { margin-block-start: 3px; inline-size: 18px; block-size: 18px; accent-color: var(--quiz-accent); flex: 0 0 auto; }
+    .quiz-step__error { color: #d33f3f; font-size: 0.9rem; margin: 8px 0 0; font-weight: 500; }
+
+    .quiz-funnel__nav { display: flex; gap: 12px; align-items: center; margin-block-start: 28px; }
+    .quiz-funnel__continue {
+      flex: 1; min-block-size: 52px; font-size: 1.05rem; font-weight: 600;
+      background-color: var(--quiz-cta, var(--quiz-accent)); color: var(--quiz-cta-text, #fff);
+      border: 0; border-radius: 999px; cursor: pointer; transition: filter 0.15s ease, transform 0.05s ease;
+    }
+    .quiz-funnel__continue:hover { filter: brightness(1.05); }
+    .quiz-funnel__continue:active { transform: scale(0.99); }
+    .quiz-funnel__continue[disabled] { opacity: 0.7; cursor: progress; }
+    .quiz-funnel__back {
+      min-block-size: 52px; border-radius: 999px; padding-inline: 22px; background: transparent;
+      border: 1.5px solid rgb(var(--color-foreground-rgb) / 0.25); color: var(--color-foreground); cursor: pointer;
+    }
+    .quiz-funnel__disclaimer { margin-block-start: 16px; font-size: 0.78rem; text-align: center; opacity: 0.6; }
+
+    .quiz-funnel.is-loading .quiz-funnel__nav,
+    .quiz-funnel.is-loading .quiz-funnel__progress-label { visibility: hidden; }
+    .quiz-step--loading { text-align: center; padding-block: clamp(24px, 6vw, 48px); }
+    .quiz-loader { display: grid; justify-items: center; gap: 14px; }
+    .quiz-loader__spinner {
+      inline-size: 56px; block-size: 56px; border-radius: 50%;
+      border: 4px solid color-mix(in srgb, var(--quiz-accent) 22%, transparent);
+      border-block-start-color: var(--quiz-accent); animation: quiz-spin 0.8s linear infinite;
+    }
+    .quiz-loader__title { margin: 4px 0 0; }
+    .quiz-loader__messages { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 10px; }
+    .quiz-loader__message {
+      display: flex; align-items: center; justify-content: center; gap: 8px; opacity: 0;
+      color: rgb(var(--color-foreground-rgb) / 0.8);
+      animation: quiz-msg-in 0.4s ease forwards; animation-delay: calc(var(--i, 0) * 0.6s);
+    }
+    .quiz-loader__message::before {
+      content: ''; inline-size: 16px; block-size: 16px; background: var(--quiz-accent); flex: 0 0 auto;
+      -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath fill='black' d='M7.6 13.5 4.1 10l1.4-1.4 2.1 2.1 5.1-5.1L14.1 7z'/%3E%3C/svg%3E") center / contain no-repeat;
+      mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath fill='black' d='M7.6 13.5 4.1 10l1.4-1.4 2.1 2.1 5.1-5.1L14.1 7z'/%3E%3C/svg%3E") center / contain no-repeat;
+    }
+
+    .quiz-social {
+      display: grid; gap: 6px; margin-block-end: 22px; padding: 14px 16px; border-radius: 14px;
+      background-color: color-mix(in srgb, var(--quiz-accent) 6%, var(--color-background)); text-align: center;
+    }
+    .quiz-social__rating { margin: 0; font-weight: 600; letter-spacing: 0.02em; }
+    .quiz-social__count { margin: 0; font-size: 0.9rem; opacity: 0.8; }
+    .quiz-social__badges { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+    .quiz-social__badge {
+      display: inline-flex; align-items: center; gap: 6px; font-size: 0.8rem; font-weight: 500;
+      padding: 5px 12px; border-radius: 999px; background-color: var(--color-background);
+      border: 1px solid color-mix(in srgb, var(--quiz-accent) 30%, transparent);
+    }
+    .quiz-social__badge::before { content: '✓'; color: var(--quiz-accent); font-weight: 700; }
+
+    @keyframes quiz-spin { to { transform: rotate(360deg); } }
+    @keyframes quiz-msg-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes quiz-step-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+    @media (prefers-reduced-motion: reduce) {
+      .quiz-funnel__progress-fill, .quiz-option, .quiz-option__control::after { transition: none; }
+      .quiz-step.is-active, .quiz-loader__message { animation: none; opacity: 1; }
+      .quiz-loader__spinner { animation-duration: 2s; }
+    }
+  </style>
+</head>
+<body>
+  <div class="preview-wrap">
+    <p class="preview-badge">
+      <span class="dot"></span>
+      <span><strong>Standalone preview</strong> of the Shopify (Horizon) <code>quiz-funnel</code> section — Ledisa GLP-1. No external calls; marketing events are logged on the right.</span>
+    </p>
+
+    <!-- ================= QUIZ ================= -->
+    <div class="preview-card">
+      <quiz-funnel-component class="quiz-funnel">
+        <div class="quiz-funnel__inner">
+          <header class="quiz-funnel__header">
+            <h2 class="quiz-funnel__heading">Find your GLP-1 match</h2>
+            <p class="quiz-funnel__subheading">Answer 8 quick questions to get your personalized plan.</p>
+          </header>
+
+          <div class="quiz-funnel__progress">
+            <div class="quiz-funnel__progress-track" data-progress-bar role="progressbar"
+              aria-label="Quiz progress" aria-valuemin="1" aria-valuemax="9" aria-valuenow="1" aria-valuetext="Step 1 of 9">
+              <span class="quiz-funnel__progress-fill" data-progress-fill></span>
+            </div>
+            <p class="quiz-funnel__progress-label" data-progress-label aria-hidden="true">Step 1 of 9</p>
+          </div>
+
+          <form class="quiz-funnel__form" data-form novalidate>
+            <div class="quiz-funnel__steps" data-steps>
+              <!-- Question steps are injected here by JS -->
+
+              <!-- Calculating screen -->
+              <div class="quiz-step quiz-step--loading" data-quiz-step data-step-type="loading" data-loading-duration="2500" aria-labelledby="calc-title" hidden>
+                <div class="quiz-loader">
+                  <span class="quiz-loader__spinner" aria-hidden="true"></span>
+                  <h3 id="calc-title" class="quiz-loader__title">Analyzing your answers…</h3>
+                  <ul class="quiz-loader__messages" role="list">
+                    <li class="quiz-loader__message" style="--i: 0;">Matching your goals…</li>
+                    <li class="quiz-loader__message" style="--i: 1;">Reviewing your metabolic profile…</li>
+                    <li class="quiz-loader__message" style="--i: 2;">Personalizing your GLP-1 plan…</li>
+                  </ul>
+                </div>
+              </div>
+
+              <!-- Contact step -->
+              <div class="quiz-step quiz-step--contact" data-quiz-step data-step-type="contact" aria-labelledby="contact-title" hidden>
+                <h3 id="contact-title" class="quiz-step__title">You're one step away 🎉</h3>
+                <p class="quiz-step__subtext">Enter your details to unlock your personalized GLP-1 plan.</p>
+
+                <div class="quiz-social">
+                  <p class="quiz-social__rating">★★★★★ 4.8/5 from 2,000+ reviews</p>
+                  <p class="quiz-social__count">Join 30,217+ women on their journey</p>
+                  <ul class="quiz-social__badges" role="list">
+                    <li class="quiz-social__badge">Plant-based</li>
+                    <li class="quiz-social__badge">Non-invasive</li>
+                    <li class="quiz-social__badge">Non-habit forming</li>
+                  </ul>
+                </div>
+
+                <div class="quiz-field">
+                  <label for="first_name">First name</label>
+                  <input id="first_name" name="first_name" type="text" autocomplete="given-name" required>
+                </div>
+                <div class="quiz-field">
+                  <label for="email">Email address</label>
+                  <input id="email" name="email" type="email" inputmode="email" autocomplete="email" required>
+                </div>
+                <div class="quiz-field">
+                  <label for="phone">Phone number</label>
+                  <input id="phone" name="phone" type="tel" inputmode="tel" autocomplete="tel" required>
+                </div>
+                <label class="quiz-consent">
+                  <input type="checkbox" name="consent" required>
+                  <span>I agree to receive emails &amp; texts about my results. Unsubscribe anytime.</span>
+                </label>
+                <p class="quiz-step__error" data-quiz-error hidden></p>
+              </div>
+            </div>
+
+            <div class="quiz-funnel__nav">
+              <button type="button" class="quiz-funnel__back" data-back hidden>Back</button>
+              <button type="submit" class="quiz-funnel__continue" data-continue>Continue</button>
+            </div>
+          </form>
+
+          <p class="quiz-funnel__disclaimer">This quiz is for informational purposes only and is not medical advice.</p>
+          <div class="visually-hidden" role="status" aria-live="polite" data-live></div>
+        </div>
+      </quiz-funnel-component>
+    </div>
+
+    <!-- ================= LIVE EVENTS ================= -->
+    <aside class="preview-events" aria-hidden="true">
+      <h2><span class="live-dot"></span> Marketing events</h2>
+      <p class="hint">GTM <code>dataLayer</code> + Meta Pixel, fired live as you play. Also in the console.</p>
+      <ol data-event-log></ol>
+    </aside>
+  </div>
+
+  <script>
+    /*
+     * Standalone demo controller. Mirrors the behavior of the production web
+     * component (assets/quiz-funnel.js) without its Horizon dependencies, so
+     * this file opens anywhere with a double-click.
+     */
+    (function () {
+      var CONFIG = {
+        quizId: 'glp1_quiz',
+        landingUrl: 'https://ledisa.com/products/glp-1',
+        autoAdvance: true,
+        requirePhone: true,
+        requireConsent: true,
+      };
+
+      var QUESTIONS = [
+        { key: 'primary_goal', q: "What's your #1 health goal right now?", options: ['Lose weight', 'Curb hunger & cravings', 'Balance my blood sugar', 'Boost energy & metabolism', 'Feel more confident'] },
+        { key: 'weight_goal', q: 'How much weight would you like to release?', options: ['Under 10 lbs', '10–25 lbs', '25–50 lbs', 'More than 50 lbs', "I'm not sure yet"] },
+        { key: 'biggest_struggle', q: 'What do you struggle with the most?', options: ['Constant hunger', 'Late-night snacking', 'Emotional eating', 'A slow metabolism', 'Sugar cravings'] },
+        { key: 'glp1_experience', q: 'Have you tried GLP-1 medications before?', options: ['Yes, currently', 'Yes, in the past', "No, but I'm curious", 'No, I prefer natural options'] },
+        { key: 'energy_levels', q: 'How are your energy levels most days?', options: ['High all day', 'Good, but I crash in the afternoon', 'Low most of the day', 'Up and down', 'Running on empty'] },
+        { key: 'delivery_preference', q: 'How do you feel about pills & injections?', options: ['I avoid injections', 'Pills upset my stomach', 'I forget to take pills', 'I love a simple patch', "Doesn't bother me"] },
+        { key: 'age_range', q: 'Which age range describes you?', options: ['18–29', '30–39', '40–49', '50–59', '60+'] },
+        { key: 'readiness', q: 'How ready are you to feel your best?', options: ['Ready today', 'Within a week', 'Just exploring', 'I need more info'] },
+      ];
+
+      var root = document.querySelector('quiz-funnel-component');
+      var stepsContainer = root.querySelector('[data-steps]');
+      var loadingStep = root.querySelector('.quiz-step--loading');
+      var EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+      // Build question steps before the loading step (mirrors the Liquid render).
+      QUESTIONS.forEach(function (item, i) {
+        var fs = document.createElement('fieldset');
+        fs.className = 'quiz-step quiz-step--question';
+        fs.setAttribute('data-quiz-step', '');
+        fs.dataset.stepType = 'question';
+        fs.dataset.stepKey = item.key;
+        fs.dataset.question = item.q;
+        fs.hidden = i !== 0;
+        var optionsHtml = item.options.map(function (opt) {
+          return '<label class="quiz-option">' +
+            '<input class="quiz-option__input visually-hidden" type="radio" name="q-' + item.key + '" value="' + opt.replace(/"/g, '&quot;') + '">' +
+            '<span class="quiz-option__control" aria-hidden="true"></span>' +
+            '<span class="quiz-option__label">' + opt + '</span></label>';
+        }).join('');
+        fs.innerHTML =
+          '<legend class="quiz-step__question"><span class="quiz-step__eyebrow">Question ' + (i + 1) + '</span>' + item.q + '</legend>' +
+          '<div class="quiz-step__options" role="radiogroup">' + optionsHtml + '</div>' +
+          '<p class="quiz-step__error" data-quiz-error hidden>Please select an option to continue.</p>';
+        stepsContainer.insertBefore(fs, loadingStep);
+      });
+
+      // --- Refs ---
+      var steps = Array.prototype.slice.call(root.querySelectorAll('[data-quiz-step]'));
+      var form = root.querySelector('[data-form]');
+      var progressFill = root.querySelector('[data-progress-fill]');
+      var progressBar = root.querySelector('[data-progress-bar]');
+      var progressLabel = root.querySelector('[data-progress-label]');
+      var backBtn = root.querySelector('[data-back]');
+      var continueBtn = root.querySelector('[data-continue]');
+      var live = root.querySelector('[data-live]');
+      var log = document.querySelector('[data-event-log]');
+
+      // Tracked step numbers (loading screen excluded), same as production.
+      var tracked = 0;
+      var trackedNumber = steps.map(function (s) { return s.dataset.stepType === 'loading' ? 0 : (tracked += 1); });
+      var trackedTotal = tracked;
+
+      var state = { index: 0, answers: {}, fired: {}, timer: 0, submitting: false };
+
+      window.dataLayer = window.dataLayer || [];
+
+      function renderEvent(name, payload, cls) {
+        window.dataLayer.push(Object.assign({ event: name }, payload));
+        console.log('[dataLayer]', name, payload);
+        var li = document.createElement('li');
+        li.className = 'pv-event' + (cls ? ' ' + cls : '');
+        li.innerHTML = '<code>' + name + '</code><pre>' + JSON.stringify(payload, null, 1) + '</pre>';
+        log.insertBefore(li, log.firstChild);
+      }
+
+      function currentStep() { return steps[state.index]; }
+
+      function updateProgress() {
+        var step = currentStep();
+        var isLoading = step.dataset.stepType === 'loading';
+        var current = isLoading ? trackedTotal : trackedNumber[state.index] || 1;
+        progressFill.style.inlineSize = Math.round((current / trackedTotal) * 100) + '%';
+        progressBar.setAttribute('aria-valuenow', current);
+        progressBar.setAttribute('aria-valuetext', 'Step ' + current + ' of ' + trackedTotal);
+        progressLabel.textContent = 'Step ' + current + ' of ' + trackedTotal;
+      }
+
+      function updateNav() {
+        backBtn.hidden = state.index === 0;
+        continueBtn.textContent = state.index === steps.length - 1 ? 'See my results' : 'Continue';
+      }
+
+      function focusStep() {
+        var step = currentStep();
+        var heading = step.querySelector('.quiz-step__question, .quiz-step__title, .quiz-loader__title');
+        var target = heading || step;
+        target.setAttribute('tabindex', '-1');
+        requestAnimationFrame(function () { target.focus(); });
+        live.textContent = step.dataset.stepType === 'loading'
+          ? (heading ? heading.textContent.trim() : 'Analyzing your answers')
+          : 'Step ' + (trackedNumber[state.index] || 1) + ' of ' + trackedTotal;
+      }
+
+      function fireStep() {
+        if (state.fired[state.index]) return;
+        state.fired[state.index] = true;
+        var step = currentStep();
+        if (step.dataset.stepType === 'loading') {
+          renderEvent('quiz_calculating', { quiz_id: CONFIG.quizId, quiz_answers: Object.assign({}, state.answers) });
+          return;
+        }
+        var num = trackedNumber[state.index];
+        var key = step.dataset.stepKey || '';
+        renderEvent('quiz_step_' + num, {
+          quiz_id: CONFIG.quizId, step_number: num, total_steps: trackedTotal,
+          step_type: step.dataset.stepType, question: step.dataset.question || null,
+          answer: key ? state.answers[key] || null : null, quiz_answers: Object.assign({}, state.answers),
+        });
+      }
+
+      function showStep(index) {
+        clearTimeout(state.timer);
+        state.index = Math.max(0, Math.min(index, steps.length - 1));
+        var step = currentStep();
+        var isLoading = step.dataset.stepType === 'loading';
+        steps.forEach(function (s, i) {
+          s.hidden = i !== state.index;
+          s.classList.toggle('is-active', i === state.index);
+        });
+        root.classList.toggle('is-loading', isLoading);
+        updateProgress(); updateNav(); focusStep(); fireStep();
+        if (isLoading && !state.freezeLoader) {
+          var dur = parseInt(step.dataset.loadingDuration || '2500', 10);
+          state.timer = setTimeout(function () { showStep(state.index + 1); }, dur);
+        }
+      }
+
+      function showError(step, msg) {
+        var el = step.querySelector('[data-quiz-error]');
+        if (el) { el.textContent = msg; el.hidden = false; }
+      }
+      function clearError(step) {
+        var el = step.querySelector('[data-quiz-error]');
+        if (el) el.hidden = true;
+      }
+      function mark(field, valid) { if (field) field.setAttribute('aria-invalid', String(!valid)); }
+
+      function validateContact(step) {
+        var f = function (n) { return step.querySelector('[name="' + n + '"]'); };
+        var first = f('first_name'), email = f('email'), phone = f('phone'), consent = f('consent');
+        var problems = [];
+        mark(first, !!first.value.trim()); if (!first.value.trim()) problems.push('your first name');
+        var emailOk = EMAIL_RE.test(email.value.trim()); mark(email, emailOk); if (!emailOk) problems.push('a valid email');
+        if (CONFIG.requirePhone) { var ok = phone.value.replace(/\D/g, '').length >= 7; mark(phone, ok); if (!ok) problems.push('a valid phone number'); }
+        var consentOk = !CONFIG.requireConsent || consent.checked; mark(consent, consentOk);
+        if (problems.length || !consentOk) {
+          showError(step, problems.length ? 'Please enter ' + problems.join(', ') + '.' : 'Please agree to continue.');
+          var bad = step.querySelector('[aria-invalid="true"]'); if (bad) bad.focus();
+          return false;
+        }
+        clearError(step); return true;
+      }
+
+      function validateStep(step) {
+        if (step.dataset.stepType === 'loading') return true;
+        if (step.dataset.stepType === 'contact') return validateContact(step);
+        var ok = step.querySelectorAll('input:checked').length > 0;
+        if (!ok) showError(step, 'Please select an option to continue.');
+        return ok;
+      }
+
+      function collectAnswer(step) {
+        if (step.dataset.stepType !== 'question') return;
+        var checked = step.querySelector('input:checked');
+        state.answers[step.dataset.stepKey] = checked ? checked.value : '';
+      }
+
+      function advance() {
+        clearTimeout(state.timer);
+        var step = currentStep();
+        if (!validateStep(step)) return;
+        collectAnswer(step);
+        if (state.index >= steps.length - 1) { submit(); return; }
+        showStep(state.index + 1);
+      }
+
+      function submit() {
+        if (state.submitting) return;
+        state.submitting = true;
+        var step = currentStep();
+        var contact = {
+          firstName: step.querySelector('[name="first_name"]').value.trim(),
+          email: step.querySelector('[name="email"]').value.trim().toLowerCase(),
+          phone: step.querySelector('[name="phone"]').value.trim(),
+        };
+        continueBtn.disabled = true;
+        continueBtn.textContent = 'Submitting…';
+
+        var properties = Object.assign({}, state.answers, {
+          quiz_id: CONFIG.quizId, quiz_source: 'GLP-1 Quiz Funnel', quiz_completed_at: new Date().toISOString(),
+        });
+        renderEvent('generate_lead', {
+          quiz_id: CONFIG.quizId, value: 0, currency: 'USD',
+          quiz_answers: Object.assign({}, state.answers),
+          user_data: { first_name: contact.firstName, email: contact.email, phone: contact.phone },
+        }, 'pv-lead');
+        renderEvent('Meta Pixel · Lead', { content_name: CONFIG.quizId, content_category: 'quiz_funnel', value: 0, currency: 'USD' }, 'pv-meta');
+        renderEvent('Klaviyo · profile + list subscribe', { list: 'RR4y8f', properties: properties }, 'pv-lead');
+
+        live.textContent = 'All set! Redirecting to your plan…';
+        setTimeout(function () { window.location.assign(CONFIG.landingUrl); }, 1600);
+      }
+
+      // --- Events ---
+      form.addEventListener('change', function (e) {
+        if (!e.target.matches('.quiz-option__input')) return;
+        var step = currentStep();
+        clearError(step);
+        if (CONFIG.autoAdvance && step.dataset.stepType === 'question') {
+          clearTimeout(state.timer);
+          state.timer = setTimeout(advance, 320);
+        }
+      });
+      form.addEventListener('submit', function (e) { e.preventDefault(); advance(); });
+      backBtn.addEventListener('click', function () {
+        clearTimeout(state.timer);
+        var target = state.index - 1;
+        while (target > 0 && steps[target].dataset.stepType === 'loading') target -= 1;
+        if (target >= 0) showStep(target);
+      });
+
+      // Optional deep-link for demos/screenshots: preview.html#step=contact | loading | 3
+      var jump = (location.hash.match(/step=([\w-]+)/) || [])[1];
+      var startIndex = 0;
+      if (jump) {
+        state.freezeLoader = true; // hold the calculating screen when deep-linked
+        if (jump === 'contact' || jump === 'loading') {
+          startIndex = steps.findIndex(function (s) { return s.dataset.stepType === jump; });
+        } else {
+          var n = parseInt(jump, 10);
+          if (n) startIndex = Math.min(n - 1, steps.length - 1);
+        }
+        if (startIndex < 0) startIndex = 0;
+      }
+
+      root.classList.add('is-enhanced');
+      showStep(startIndex);
+    })();
+  </script>
+</body>
+</html>

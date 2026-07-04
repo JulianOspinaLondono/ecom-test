@@ -30,6 +30,12 @@ Then: **Admin → Pages → Add page → Template: `quiz`**, or add the **Quiz f
 the theme editor. Paste your **GTM / Meta / Klaviyo** IDs into the section settings. Full guide
 in [`docs/SETUP.md`](docs/SETUP.md).
 
+### Standalone preview
+
+Open [`preview.html`](preview.html) in any browser (no server, no Shopify) to see the funnel
+with sample data and a **live event log** — handy for demos/Loom. Deep-link a screen with
+`preview.html#step=contact`, `#step=loading`, or `#step=3`.
+
 ## Highlights (why it's senior-grade)
 
 - **Idiomatic Horizon:** `<quiz-funnel>` extends the theme's `@theme/component` base class and

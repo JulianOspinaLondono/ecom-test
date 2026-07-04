@@ -83,6 +83,7 @@
         "subheading": "Answer 8 quick questions to get your personalized plan.",
         "landing_url": "https://ledisa.com/products/glp-1",
         "quiz_id": "glp1_quiz",
+        "gtm_container_id": "GTM-NNX4MZ7V",
         "meta_pixel_id": "620635847480642",
         "klaviyo_public_key": "RXGNCa",
         "klaviyo_list_id": "RR4y8f"

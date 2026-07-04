@@ -18,7 +18,7 @@
  */
 
 import { Component } from '@theme/component';
-import { loadGtm, loadMetaPixel, trackStep, trackLead } from './quiz-analytics.js';
+import { loadGtm, loadMetaPixel, trackStep, trackLead, pushEvent } from './quiz-analytics.js';
 import { upsertProfile, subscribeToList, trackEvent, toE164 } from './quiz-klaviyo.js';
 
 /**
@@ -57,6 +57,9 @@ class QuizFunnel extends Component {
   /** Question text keyed by property key (for readable payloads). @type {Record<string, string>} */
   questions = {};
   currentIndex = 0;
+  /** 1-based tracked step number per DOM index (0 for the non-tracked loading step). @type {number[]} */
+  stepTrackedNumber = [];
+  trackedTotal = 0;
   #firedSteps = new Set();
   #advanceTimer = 0;
   #submitting = false;
@@ -71,6 +74,16 @@ class QuizFunnel extends Component {
     this.config = this.#readConfig();
     this.steps = /** @type {HTMLElement[]} */ ([...this.querySelectorAll('[data-quiz-step]')]);
     if (this.steps.length === 0) return;
+
+    // Precompute tracked step numbers: "Step X of N" and quiz_step_N count only
+    // questions + contact, not the interstitial calculating screen.
+    let tracked = 0;
+    this.stepTrackedNumber = this.steps.map((step) => {
+      if (step.dataset.stepType === 'loading') return 0;
+      tracked += 1;
+      return tracked;
+    });
+    this.trackedTotal = tracked;
 
     // Enhance: switch from "all steps visible" (no-JS) to a one-at-a-time wizard.
     this.classList.add('is-enhanced');
@@ -129,7 +142,10 @@ class QuizFunnel extends Component {
 
   back() {
     clearTimeout(this.#advanceTimer);
-    if (this.currentIndex > 0) this.showStep(this.currentIndex - 1);
+    let target = this.currentIndex - 1;
+    // Skip the auto-advancing calculating screen when navigating back.
+    while (target > 0 && this.steps[target]?.dataset.stepType === 'loading') target -= 1;
+    if (target >= 0) this.showStep(target);
   }
 
   /* ------------------------------------------------------------------ *
@@ -153,7 +169,10 @@ class QuizFunnel extends Component {
 
   /** @param {number} index */
   showStep(index) {
+    clearTimeout(this.#advanceTimer);
     this.currentIndex = Math.max(0, Math.min(index, this.steps.length - 1));
+    const current = this.currentStepEl;
+    const isLoading = current?.dataset.stepType === 'loading';
 
     this.steps.forEach((step, i) => {
       const active = i === this.currentIndex;
@@ -161,10 +180,18 @@ class QuizFunnel extends Component {
       step.classList.toggle('is-active', active);
     });
 
+    this.classList.toggle('is-loading', isLoading);
+
     this.#updateProgress();
     this.#updateNav();
     this.#focusStep();
     this.#fireStepEvent();
+
+    // The calculating screen auto-advances to the contact step.
+    if (isLoading) {
+      const duration = parseInt(current?.dataset.loadingDuration || '2500', 10);
+      this.#advanceTimer = window.setTimeout(() => this.showStep(this.currentIndex + 1), duration);
+    }
   }
 
   get currentStepEl() {
@@ -175,12 +202,16 @@ class QuizFunnel extends Component {
     // The progress bar is optional; bail out cleanly when it isn't rendered.
     if (!this.refs.progressFill) return;
 
-    const total = this.steps.length;
-    const current = this.currentIndex + 1;
+    const total = this.trackedTotal || this.steps.length;
+    const step = this.currentStepEl;
+    const isLoading = step?.dataset.stepType === 'loading';
+    // Hold the bar at 100% during the calculating screen.
+    const current = isLoading ? total : this.stepTrackedNumber[this.currentIndex] || 1;
     const percent = Math.round((current / total) * 100);
 
     this.refs.progressFill.style.inlineSize = `${percent}%`;
     this.refs.progressBar?.setAttribute('aria-valuenow', String(current));
+    this.refs.progressBar?.setAttribute('aria-valuemax', String(total));
     this.refs.progressBar?.setAttribute('aria-valuetext', `Step ${current} of ${total}`);
     if (this.refs.progressLabel) this.refs.progressLabel.textContent = `Step ${current} of ${total}`;
   }
@@ -199,14 +230,19 @@ class QuizFunnel extends Component {
   #focusStep() {
     const step = this.currentStepEl;
     if (!step) return;
-    const heading = step.querySelector('.quiz-step__question, .quiz-step__title');
+    const heading = step.querySelector('.quiz-step__question, .quiz-step__title, .quiz-loader__title');
     const target = /** @type {HTMLElement | null} */ (heading) ?? step;
     target.setAttribute('tabindex', '-1');
     // Defer so the browser paints the newly-shown step before focusing.
     requestAnimationFrame(() => target.focus({ preventScroll: false }));
 
-    const total = this.steps.length;
-    this.refs.live.textContent = `Step ${this.currentIndex + 1} of ${total}`;
+    if (step.dataset.stepType === 'loading') {
+      this.refs.live.textContent = heading?.textContent?.trim() || 'Analyzing your answers';
+    } else {
+      const total = this.trackedTotal || this.steps.length;
+      const current = this.stepTrackedNumber[this.currentIndex] || 1;
+      this.refs.live.textContent = `Step ${current} of ${total}`;
+    }
   }
 
   /* ------------------------------------------------------------------ *
@@ -218,6 +254,7 @@ class QuizFunnel extends Component {
    * @returns {boolean}
    */
   #validateStep(step) {
+    if (step.dataset.stepType === 'loading') return true;
     if (step.dataset.stepType === 'contact') return this.#validateContact(step);
 
     if (step.dataset.stepOptional === 'true') return true;
@@ -277,7 +314,8 @@ class QuizFunnel extends Component {
    * @param {HTMLElement} step
    */
   #collectAnswer(step) {
-    if (step.dataset.stepType === 'contact') return;
+    // Only question steps carry answers (skip contact + loading steps).
+    if (step.dataset.stepType !== 'question') return;
 
     const key = step.dataset.stepKey || step.dataset.stepId || '';
     const isMultiple = step.dataset.stepMultiple === 'true';
@@ -295,15 +333,22 @@ class QuizFunnel extends Component {
   #fireStepEvent() {
     const step = this.currentStepEl;
     if (!step) return;
-    const stepNumber = this.currentIndex + 1;
-    if (this.#firedSteps.has(stepNumber)) return; // fire once per step reached
-    this.#firedSteps.add(stepNumber);
 
+    // Dedupe by DOM index so each step fires once, even if revisited.
+    if (this.#firedSteps.has(this.currentIndex)) return;
+    this.#firedSteps.add(this.currentIndex);
+
+    if (step.dataset.stepType === 'loading') {
+      pushEvent('quiz_calculating', { quiz_id: this.config.quizId, quiz_answers: { ...this.answers } });
+      return;
+    }
+
+    const stepNumber = this.stepTrackedNumber[this.currentIndex] || this.currentIndex + 1;
     const key = step.dataset.stepKey || '';
     trackStep({
       quizId: this.config.quizId,
       stepNumber,
-      totalSteps: this.steps.length,
+      totalSteps: this.trackedTotal || this.steps.length,
       stepId: step.dataset.stepId || `step-${stepNumber}`,
       stepType: step.dataset.stepType,
       question: step.dataset.question || undefined,

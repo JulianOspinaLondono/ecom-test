@@ -10,7 +10,10 @@
 {% liquid
   assign s = section.settings
   assign total_steps = section.blocks.size | plus: 1
-  assign accent = s.accent_color | default: '#1f6f5c'
+  assign accent = s.accent_color | default: '#1d8391'
+  assign cta = s.cta_color | default: '#ff6b12'
+  assign cta_text = s.cta_text_color | default: '#ffffff'
+  assign calculating_ms = s.calculating_duration | default: 2500
 %}
 
 <quiz-funnel-component
@@ -20,6 +23,8 @@
   data-loading-label="{{ s.loading_label | default: 'Submitting…' | escape }}"
   style="
     --quiz-accent: {{ accent }};
+    --quiz-cta: {{ cta }};
+    --quiz-cta-text: {{ cta_text }};
     --quiz-max-width: {{ s.max_width | default: 720 }}px;
     {% render 'spacing-style', settings: s %}
   "
@@ -90,6 +95,37 @@
           %}
         {% endfor %}
 
+        {%- comment -%} Interstitial: "analyzing your answers" screen before the ask. {%- endcomment -%}
+        {% if s.show_calculating %}
+          <div
+            class="quiz-step quiz-step--loading"
+            data-quiz-step
+            data-step-type="loading"
+            data-loading-duration="{{ calculating_ms }}"
+            aria-labelledby="quiz-calc-title"
+            hidden
+          >
+            <div class="quiz-loader">
+              <span class="quiz-loader__spinner" aria-hidden="true"></span>
+              <h3 id="quiz-calc-title" class="quiz-loader__title">
+                {{ s.calculating_title | default: 'Analyzing your answers…' | escape }}
+              </h3>
+              {% assign calc_messages = s.calculating_messages | strip | split: '
+' %}
+              {% if calc_messages.size > 0 %}
+                <ul class="quiz-loader__messages" role="list">
+                  {% for message in calc_messages %}
+                    {% assign msg = message | strip %}
+                    {% if msg != blank %}
+                      <li class="quiz-loader__message" style="--i: {{ forloop.index0 }};">{{ msg | escape }}</li>
+                    {% endif %}
+                  {% endfor %}
+                </ul>
+              {% endif %}
+            </div>
+          </div>
+        {% endif %}
+
         {%- comment -%} Fixed final step: contact capture + submit. {%- endcomment -%}
         <div
           class="quiz-step quiz-step--contact"
@@ -104,6 +140,29 @@
           </h3>
           {% if s.contact_subtext != blank %}
             <p class="quiz-step__subtext">{{ s.contact_subtext | escape }}</p>
+          {% endif %}
+
+          {% if s.rating_text != blank or s.social_proof_text != blank or s.trust_badges != blank %}
+            <div class="quiz-social">
+              {% if s.rating_text != blank %}
+                <p class="quiz-social__rating">{{ s.rating_text | escape }}</p>
+              {% endif %}
+              {% if s.social_proof_text != blank %}
+                <p class="quiz-social__count">{{ s.social_proof_text | escape }}</p>
+              {% endif %}
+              {% if s.trust_badges != blank %}
+                {% assign badges = s.trust_badges | strip | split: '
+' %}
+                <ul class="quiz-social__badges" role="list">
+                  {% for badge in badges %}
+                    {% assign b = badge | strip %}
+                    {% if b != blank %}
+                      <li class="quiz-social__badge">{{ b | escape }}</li>
+                    {% endif %}
+                  {% endfor %}
+                </ul>
+              {% endif %}
+            </div>
           {% endif %}
 
           <div class="quiz-field">
@@ -319,7 +378,7 @@
 
   .quiz-option:hover {
     border-color: var(--quiz-accent);
-    background-color: rgb(var(--color-foreground-rgb) / 0.03);
+    background-color: color-mix(in srgb, var(--quiz-accent) 5%, var(--color-background));
   }
 
   .quiz-option:active { transform: scale(0.99); }
@@ -358,7 +417,7 @@
 
   .quiz-option:has(.quiz-option__input:checked) {
     border-color: var(--quiz-accent);
-    background-color: rgb(var(--color-foreground-rgb) / 0.04);
+    background-color: color-mix(in srgb, var(--quiz-accent) 8%, var(--color-background));
     box-shadow: 0 0 0 1px var(--quiz-accent) inset;
   }
 
@@ -437,13 +496,17 @@
     flex: 1;
     min-block-size: 52px;
     font-size: 1.05rem;
-    background-color: var(--quiz-accent);
-    color: #fff;
+    font-weight: 600;
+    background-color: var(--quiz-cta, var(--quiz-accent));
+    color: var(--quiz-cta-text, #fff);
     border: 0;
     border-radius: 999px;
     cursor: pointer;
+    transition: filter 0.15s ease, transform 0.05s ease;
   }
 
+  .quiz-funnel__continue:hover { filter: brightness(1.05); }
+  .quiz-funnel__continue:active { transform: scale(0.99); }
   .quiz-funnel__continue[disabled] { opacity: 0.7; cursor: progress; }
 
   .quiz-funnel__back {
@@ -463,6 +526,97 @@
     opacity: 0.6;
   }
 
+  /* --- Calculating (loading) step --- */
+  .quiz-funnel.is-loading .quiz-funnel__nav,
+  .quiz-funnel.is-loading .quiz-funnel__progress-label { visibility: hidden; }
+
+  .quiz-step--loading { text-align: center; padding-block: clamp(24px, 6vw, 48px); }
+
+  .quiz-loader { display: grid; justify-items: center; gap: 14px; }
+
+  .quiz-loader__spinner {
+    inline-size: 56px;
+    block-size: 56px;
+    border-radius: 50%;
+    border: 4px solid color-mix(in srgb, var(--quiz-accent) 22%, transparent);
+    border-block-start-color: var(--quiz-accent);
+    animation: quiz-spin 0.8s linear infinite;
+  }
+
+  .quiz-loader__title { margin: 4px 0 0; }
+
+  .quiz-loader__messages { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 10px; }
+
+  .quiz-loader__message {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    opacity: 0;
+    color: rgb(var(--color-foreground-rgb) / 0.8);
+    animation: quiz-msg-in 0.4s ease forwards;
+    animation-delay: calc(var(--i, 0) * 0.6s);
+  }
+
+  .quiz-loader__message::before {
+    content: '';
+    inline-size: 16px;
+    block-size: 16px;
+    background: var(--quiz-accent);
+    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath fill='black' d='M7.6 13.5 4.1 10l1.4-1.4 2.1 2.1 5.1-5.1L14.1 7z'/%3E%3C/svg%3E") center / contain no-repeat;
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath fill='black' d='M7.6 13.5 4.1 10l1.4-1.4 2.1 2.1 5.1-5.1L14.1 7z'/%3E%3C/svg%3E") center / contain no-repeat;
+    flex: 0 0 auto;
+  }
+
+  /* --- Social proof (contact step) --- */
+  .quiz-social {
+    display: grid;
+    gap: 6px;
+    margin-block-end: 22px;
+    padding: 14px 16px;
+    border-radius: 14px;
+    background-color: color-mix(in srgb, var(--quiz-accent) 6%, var(--color-background));
+    text-align: center;
+  }
+
+  .quiz-social__rating { margin: 0; font-weight: 600; letter-spacing: 0.02em; }
+  .quiz-social__count { margin: 0; font-size: 0.9rem; opacity: 0.8; }
+
+  .quiz-social__badges {
+    list-style: none;
+    margin: 6px 0 0;
+    padding: 0;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+  }
+
+  .quiz-social__badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.8rem;
+    font-weight: 500;
+    padding: 5px 12px;
+    border-radius: 999px;
+    background-color: var(--color-background);
+    border: 1px solid color-mix(in srgb, var(--quiz-accent) 30%, transparent);
+  }
+
+  .quiz-social__badge::before {
+    content: '✓';
+    color: var(--quiz-accent);
+    font-weight: 700;
+  }
+
+  @keyframes quiz-spin { to { transform: rotate(360deg); } }
+
+  @keyframes quiz-msg-in {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
   @keyframes quiz-step-in {
     from { opacity: 0; transform: translateY(8px); }
     to { opacity: 1; transform: translateY(0); }
@@ -472,7 +626,9 @@
     .quiz-funnel__progress-fill,
     .quiz-option,
     .quiz-option__control::after { transition: none; }
-    .quiz-step.is-active { animation: none; }
+    .quiz-step.is-active,
+    .quiz-loader__message { animation: none; opacity: 1; }
+    .quiz-loader__spinner { animation-duration: 2s; }
   }
 
   @media screen and (min-width: 750px) {
@@ -535,8 +691,21 @@
     { "type": "checkbox", "id": "enable_sms", "label": "Also collect SMS consent", "default": false },
     { "type": "text", "id": "default_country_code", "label": "Default country code for phone", "info": "Digits only, no +. Used to format numbers to E.164.", "default": "1" },
 
+    { "type": "header", "content": "Calculating screen" },
+    { "type": "checkbox", "id": "show_calculating", "label": "Show \"analyzing results\" screen", "info": "Interstitial shown before the contact step.", "default": true },
+    { "type": "text", "id": "calculating_title", "label": "Title", "default": "Analyzing your answers…" },
+    { "type": "textarea", "id": "calculating_messages", "label": "Rotating messages", "info": "One per line.", "default": "Matching your goals…\nReviewing your metabolic profile…\nPersonalizing your GLP-1 plan…" },
+    { "type": "range", "id": "calculating_duration", "label": "Duration", "min": 1000, "max": 5000, "step": 250, "unit": "ms", "default": 2500 },
+
+    { "type": "header", "content": "Social proof (contact step)" },
+    { "type": "text", "id": "rating_text", "label": "Rating line", "default": "★★★★★ 4.8/5 from 2,000+ reviews" },
+    { "type": "text", "id": "social_proof_text", "label": "Social proof line", "default": "Join 30,217+ women on their journey" },
+    { "type": "textarea", "id": "trust_badges", "label": "Trust badges", "info": "One per line.", "default": "Plant-based\nNon-invasive\nNon-habit forming" },
+
     { "type": "header", "content": "Design" },
-    { "type": "color", "id": "accent_color", "label": "Accent color", "default": "#1f6f5c" },
+    { "type": "color", "id": "accent_color", "label": "Accent color", "info": "Progress, selected answers, focus.", "default": "#1d8391" },
+    { "type": "color", "id": "cta_color", "label": "CTA button color", "default": "#ff6b12" },
+    { "type": "color", "id": "cta_text_color", "label": "CTA text color", "default": "#ffffff" },
     { "type": "range", "id": "max_width", "label": "Max width", "min": 480, "max": 1000, "step": 20, "unit": "px", "default": 720 },
 
     { "type": "header", "content": "Section padding" },

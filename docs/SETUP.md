@@ -80,7 +80,8 @@ All events pass quiz data as parameters so GTM/GA4/Meta can segment without code
 
 | Event | When | Key parameters |
 |---|---|---|
-| `quiz_step_1` … `quiz_step_N` | Each step becomes active (once) | `quiz_id`, `step_number`, `total_steps`, `step_id`, `step_type`, `question`, `answer`, `quiz_answers` |
+| `quiz_step_1` … `quiz_step_N` | Each step becomes active (once). N = questions + contact; the calculating screen is **not** counted. | `quiz_id`, `step_number`, `total_steps`, `step_id`, `step_type`, `question`, `answer`, `quiz_answers` |
+| `quiz_calculating` | The "analyzing your answers" screen is shown | `quiz_id`, `quiz_answers` |
 | `generate_lead` | Final submit | `quiz_id`, `value`, `currency`, `quiz_answers`, `user_data{first_name,email,phone}` |
 
 > PII lives under a namespaced `user_data` object so you can route it to a **server-side
